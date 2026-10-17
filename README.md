@@ -6,6 +6,23 @@ This is a lottery. A 2020 iMac cannot compete with the Bitcoin network. The pane
 
 The program only needs a public Bitcoin address. It will not accept a private key or a seed phrase.
 
+## What a found block pays
+
+A share accepted by solo.ckpool.org is a whole block, paid to the public address in `config.json`. The amount is the subsidy plus the transaction fees inside that block, minus the pool fee. The pool's own page states a 2% fee, charged only when a block is found. No block means no payout and no fee.
+
+Checked on 17 October 2026, after the April 2024 halving and before the next one:
+
+- Subsidy: 3.125 BTC.
+- After the 2% fee, the subsidy alone is 3.0625 BTC.
+- Recent blocks found through this pool carried only a few hundredths of a bitcoin in fees, so a normal payout sits a little above 3.06 BTC.
+- mempool.space listed bitcoin at 81,390 USD that day, which puts 3.0625 BTC near 249,000 USD. The dollar figure moves with the price. The bitcoin figure does not, until the next halving.
+
+## A block can land today
+
+The miner is not working on one block until 2028. The network opens a new block about every 10 minutes. This Mac tries to solve whichever block is open at that moment. When someone else publishes a block, that attempt is discarded and the next block starts immediately.
+
+A find, if it ever happens, is one block on one day: today, tomorrow, or any later day, each with the same tiny chance. 2028 is only the next halving. Around block 1,050,000 the subsidy falls from 3.125 BTC to 1.5625 BTC. The search does not stop there, and it does not have to wait until then.
+
 ## What was verified on this iMac
 
 Machine: iMac 2020, Intel Core i7-10700K (8 cores / 16 threads), 32 GB RAM, macOS 26.7.1.
@@ -44,7 +61,7 @@ One subscribe timed out once and the miner retried 30 seconds later. After the j
 
 `ps` showed the miner at nice value 19. The launcher asks for `nice -n 15`; macOS reported 19. Either way it is below normal priority. `caffeinate -ims` stayed up for the same session.
 
-During one 2-thread run, `pmset` reported a CPU speed limit under 100 on two checks in a row. The panel stopped the miner for that. A following run stayed at speed limit 100. Temperature in degrees was never available without sudo.
+During one 2-thread run, `pmset` reported a CPU speed limit under 100 on two checks in a row. The panel stopped the miner for that. A following run stayed at speed limit 100. Die temperature is read with `powermetrics` through a sudoers rule that allows that one command and nothing else. The panel stops the miner at 98 °C. The administrator password is not stored.
 
 Network difficulty read from `mempool.space` while building this: `140577680051919.62` at block `971898`.
 
@@ -116,8 +133,7 @@ caffeinate -ims nice -n 15 bin/minerd \
 - `caffeinate -ims` while the miner is running, so idle sleep stays off.
 - Live chart, current hashrate, and an average that ignores the first 8 seconds.
 - Accepted and rejected shares, uptime, pool status, and the latest log lines. Stats are parsed from `minerd` stderr. A line that cannot be parsed is kept in the log and does not stop the panel.
-- CPU use from `psutil`, and CPU speed limit from `pmset -g therm`, both without sudo.
-- Temperature in degrees is not shown. macOS only exposes it through `powermetrics`, which asks for an administrator password. This program never calls sudo. If `CPU_Speed_Limit` stays under 100 for two checks in a row, the miner is stopped.
+- CPU use from `psutil`, and CPU speed limit from `pmset -g therm`, both without sudo. If `CPU_Speed_Limit` stays under 100 for two checks in a row, the miner is stopped.
 - Odds from your hashrate and the current difficulty at `https://mempool.space/api/`. Expected hashes per block are `difficulty × 2^32`. The panel states the expected years and the chance of a block in the next day as `1 in N`.
 
 ## Configuration
