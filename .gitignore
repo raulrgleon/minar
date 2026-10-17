@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+bin/minerd
+bin/minerd.sha256
+config.json
+config.json.tmp
+third_party/
+.DS_Store

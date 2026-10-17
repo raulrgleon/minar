@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Minar</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <p class="mark">iMac · solo.ckpool.org · SHA-256d</p>
+      <h1>Minar</h1>
+    </header>
+
+    <p id="notice" class="notice" hidden></p>
+
+    <section class="rate-row">
+      <div>
+        <p id="rate" class="rate">0 H/s</p>
+        <p id="average" class="average">La media aparece cuando el ritmo se estabiliza.</p>
+      </div>
+      <div class="actions">
+        <button id="start" type="button">Arrancar</button>
+        <button id="stop" type="button">Parar</button>
+      </div>
+    </section>
+
+    <form id="setup">
+      <label>
+        Dirección pública
+        <input id="address" name="address" autocomplete="off" spellcheck="false" inputmode="text">
+      </label>
+      <label>
+        Hilos
+        <input id="threads" name="threads" type="number" min="1" max="16" value="4">
+      </label>
+      <button id="save" type="submit">Guardar dirección</button>
+    </form>
+    <p id="thread-help" class="help"></p>
+
+    <canvas id="chart" width="1000" height="240" aria-label="Ritmo de hashes de los últimos minutos"></canvas>
+
+    <section id="odds" class="odds">
+      <p id="odds-text">Arranca el minero para calcular la probabilidad con tu ritmo real y la dificultad de la red.</p>
+    </section>
+
+    <dl class="facts">
+      <div><dt>Pool</dt><dd id="pool">parado</dd></div>
+      <div><dt>Aceptadas</dt><dd id="accepted">0</dd></div>
+      <div><dt>Rechazadas</dt><dd id="rejected">0</dd></div>
+      <div><dt>Tiempo</dt><dd id="uptime">0:00</dd></div>
+      <div><dt>CPU</dt><dd id="cpu">—</dd></div>
+      <div><dt>Límite de velocidad</dt><dd id="speed">—</dd></div>
+      <div><dt>Temperatura</dt><dd id="temp">sin lectura</dd></div>
+    </dl>
+    <p id="temp-note" class="help"></p>
+
+    <h2>Lo que va diciendo el minero</h2>
+    <pre id="logs">Cuando arranque, las líneas aparecen aquí.</pre>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
