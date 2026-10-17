@@ -29,7 +29,7 @@ main {
   padding: 36px 28px 64px;
 }
 
-h1, h2, .rate, .odds p {
+h1, h2, .odds p {
   font-family: "Iowan Old Style", Palatino, "Palatino Linotype", serif;
   font-weight: 400;
 }
@@ -59,14 +59,26 @@ h2 {
   margin-top: 28px;
 }
 
-.rate {
+.rate, .temp {
   margin: 0;
-  font-size: 72px;
+  font-family: "Iowan Old Style", Palatino, "Palatino Linotype", serif;
+  font-weight: 400;
   line-height: 0.9;
   letter-spacing: -0.04em;
-  color: var(--oxide);
   font-variant-numeric: tabular-nums;
 }
+
+.rate {
+  font-size: 72px;
+  color: var(--oxide);
+}
+
+.temp {
+  font-size: 56px;
+  color: var(--ink);
+}
+
+.temp.hot { color: var(--stamp); }
 
 .average, .help, .notice {
   color: var(--steel);
@@ -117,10 +129,22 @@ button:disabled {
 
 #setup {
   display: grid;
-  grid-template-columns: 1fr 120px auto;
+  grid-template-columns: 1fr auto;
   gap: 12px;
   align-items: end;
   margin-top: 28px;
+}
+
+.levels {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.levels button[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
 }
 
 label {
@@ -164,7 +188,7 @@ canvas {
 
 .facts {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 12px 16px;
   margin: 8px 0 0;
 }
@@ -210,10 +234,11 @@ pre {
 @media (max-width: 800px) {
   h1 { font-size: 48px; }
   .rate { font-size: 48px; }
+  .temp { font-size: 40px; }
   .odds p { font-size: 22px; }
   .rate-row, #setup { display: block; }
-  .actions { margin-top: 16px; }
+  .levels { flex-wrap: wrap; }
+  .actions, #save { margin-top: 12px; }
   label { margin-top: 12px; }
-  #save { margin-top: 12px; }
   .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

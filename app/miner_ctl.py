@@ -13,11 +13,10 @@ from pathlib import Path
 import psutil
 
 from app.parser import MinerLogParser, clean_log_line
-from app.system_stats import read_thermal, temperature_celsius
+from app.system_stats import TEMP_STOP_C, read_cpu_temperature, read_thermal
 
 POOL_URL = "stratum+tcp://solo.ckpool.org:3333"
 POOL_PASSWORD = "x"
-NICE_LEVEL = "15"
 _MACHO_MAGICS = {
     b"\xfe\xed\xfa\xcf",
     b"\xfe\xed\xfa\xce",
@@ -51,8 +50,12 @@ class MinerService:
         self._stop_reason: str | None = None
         self._exit_code: int | None = None
         self._threads = 0
+        self._nice = 10
         self._address = ""
         self._cpu_percent = 0.0
+        self._temp_c: float | None = None
+        self._temp_note = "Leyendo la temperatura del núcleo."
+        self._temp_reads = 0
         self._thermal = {"available": False, "speed_limit": None, "throttling": False, "error": None}
         self._throttle_hits = 0
         self._monitor = threading.Thread(target=self._monitor_loop, name="minar-monitor", daemon=True)
@@ -83,21 +86,18 @@ class MinerService:
                 "parse_errors": self._parser.parse_errors,
                 "algo": self._parser.algo,
                 "cpu_percent": self._cpu_percent,
-                "cpu_temp_c": temperature_celsius(),
-                "temp_note": (
-                    "La temperatura en grados no está disponible sin sudo. "
-                    "powermetrics puede leerla, pero pide contraseña de administrador, y este programa no la pide."
-                ),
+                "cpu_temp_c": self._temp_c,
+                "temp_note": self._temp_note,
                 "speed_limit": self._thermal.get("speed_limit"),
                 "thermal_available": bool(self._thermal.get("available")),
                 "throttling": bool(self._thermal.get("throttling")),
                 "stop_reason": self._stop_reason,
                 "exit_code": self._exit_code,
-                "nice": int(NICE_LEVEL),
+                "nice": self._nice,
                 "pool_url": POOL_URL,
             }
 
-    def start(self, address: str, threads: int) -> None:
+    def start(self, address: str, threads: int, nice: int) -> None:
         self._require_binary()
         with self._lock:
             if self._is_running_locked():
@@ -115,6 +115,7 @@ class MinerService:
             self._exit_code = None
             self._stop_requested = False
             self._threads = threads
+            self._nice = nice
             self._address = address
             self._throttle_hits = 0
             cmd = [
@@ -122,7 +123,7 @@ class MinerService:
                 "-ims",
                 "/usr/bin/nice",
                 "-n",
-                NICE_LEVEL,
+                str(nice),
                 str(self.binary),
                 "-a",
                 "sha256d",
@@ -246,6 +247,7 @@ class MinerService:
 
     def _monitor_loop(self) -> None:
         psutil.cpu_percent(interval=None)
+        self._store_temperature(read_cpu_temperature())
         while not self._closed:
             time.sleep(2)
             try:
@@ -253,21 +255,40 @@ class MinerService:
             except Exception:
                 cpu = 0.0
             thermal = read_thermal()
+            self._temp_reads += 1
+            temperature = read_cpu_temperature() if self._temp_reads % 3 == 0 else None
             should_stop = False
+            stop_reason = None
             with self._lock:
                 self._cpu_percent = cpu
                 self._thermal = thermal
+                if temperature is not None:
+                    self._temp_c = temperature["celsius"]
+                    self._temp_note = temperature["note"]
                 running = self._is_running_locked()
-                if running and thermal.get("throttling"):
+                hot = self._temp_c is not None and self._temp_c >= TEMP_STOP_C
+                if running and hot:
+                    should_stop = True
+                    stop_reason = (
+                        f"Paré el minero porque el núcleo llegó a {self._temp_c:.0f} °C."
+                    )
+                elif running and thermal.get("throttling"):
                     self._throttle_hits += 1
-                    should_stop = self._throttle_hits >= 2
+                    if self._throttle_hits >= 2:
+                        should_stop = True
+                        limit = thermal.get("speed_limit")
+                        stop_reason = (
+                            f"Paré el minero porque macOS bajó el límite de velocidad de la CPU a {limit} de 100."
+                        )
                 else:
                     self._throttle_hits = 0
-            if should_stop:
-                limit = thermal.get("speed_limit")
-                self.stop(
-                    f"Paré el minero porque macOS bajó el límite de velocidad de la CPU a {limit} de 100."
-                )
+            if should_stop and stop_reason:
+                self.stop(stop_reason)
+
+    def _store_temperature(self, temperature: dict) -> None:
+        with self._lock:
+            self._temp_c = temperature["celsius"]
+            self._temp_note = temperature["note"]
 
     def _is_running_locked(self) -> bool:
         return self._proc is not None and self._proc.poll() is None

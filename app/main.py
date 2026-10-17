@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.btc_address import AddressError, validate_public_address
+from app.levels import LEVELS, normalize_level
 from app.miner_ctl import MinerError, MinerService
 from app.odds import block_odds
 
@@ -42,12 +43,12 @@ _difficulty: dict = {"value": None, "fetched_at": None, "error": None}
 class ConfigIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     btc_address: str = Field(min_length=1, max_length=90)
-    threads: int | None = Field(default=None, ge=1, le=256)
+    level: str | None = Field(default=None, max_length=16)
 
 
 class StartIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    threads: int | None = Field(default=None, ge=1, le=256)
+    level: str | None = Field(default=None, max_length=16)
 
 
 @app.middleware("http")
@@ -88,10 +89,16 @@ def health():
 @app.get("/api/config")
 def get_config():
     cfg = _load_config()
+    spec = LEVELS[cfg["level"]]
     return {
         "btc_address": cfg["btc_address"],
-        "threads": cfg["threads"],
-        "max_threads": _max_threads(),
+        "level": cfg["level"],
+        "threads": spec["threads"],
+        "nice": spec["nice"],
+        "levels": {
+            name: {"threads": item["threads"], "nice": item["nice"], "label": item["label"]}
+            for name, item in LEVELS.items()
+        },
         "physical_cores": psutil.cpu_count(logical=False) or 0,
         "logical_cpus": _max_threads(),
         "miner_present": BINARY.is_file(),
@@ -102,15 +109,19 @@ def get_config():
 def save_config(body: ConfigIn):
     try:
         address = validate_public_address(body.btc_address)
-    except AddressError as exc:
+        level = _check_level(body.level or _load_config()["level"])
+    except (AddressError, MinerError) as exc:
         return JSONResponse({"detail": str(exc)}, status_code=400)
-    threads = body.threads if body.threads is not None else _load_config()["threads"]
-    try:
-        threads = _check_threads(threads)
-    except MinerError as exc:
-        return JSONResponse({"detail": str(exc)}, status_code=400)
-    _write_config(address, threads)
-    return {"btc_address": address, "threads": threads}
+    _write_config(address, level)
+    spec = LEVELS[level]
+    running = _service.snapshot()["running"]
+    if running:
+        try:
+            _service.stop(None)
+            _service.start(address, spec["threads"], spec["nice"])
+        except MinerError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=400)
+    return {"btc_address": address, "level": level, "threads": spec["threads"], "restarted": running}
 
 
 @app.get("/api/status")
@@ -122,18 +133,21 @@ def status():
     snap["difficulty"] = diff
     snap["odds"] = odds
     snap["max_threads"] = _max_threads()
+    snap["level"] = _load_config()["level"]
     return snap
 
 
 @app.post("/api/start")
 def start(body: StartIn):
     cfg = _load_config()
-    threads = body.threads if body.threads is not None else cfg["threads"]
     try:
         address = validate_public_address(cfg["btc_address"])
-        threads = _check_threads(threads)
-        _write_config(address, threads)
-        _service.start(address, threads)
+        level = _check_level(body.level or cfg["level"])
+        _write_config(address, level)
+        spec = LEVELS[level]
+        if _service.snapshot()["running"]:
+            _service.stop(None)
+        _service.start(address, spec["threads"], spec["nice"])
     except (AddressError, MinerError) as exc:
         return JSONResponse({"detail": str(exc)}, status_code=400)
     return _service.snapshot()
@@ -149,32 +163,41 @@ def _max_threads() -> int:
     return max(1, psutil.cpu_count(logical=True) or os.cpu_count() or 1)
 
 
-def _check_threads(threads: int) -> int:
-    limit = _max_threads()
-    if threads < 1 or threads > limit:
-        raise MinerError(f"Los hilos tienen que estar entre 1 y {limit}.")
-    return threads
+def _check_level(level: str) -> str:
+    if level not in LEVELS:
+        raise MinerError("El ritmo tiene que ser bajo, medio o alto.")
+    spec = LEVELS[level]
+    if spec["threads"] > _max_threads():
+        raise MinerError("Este Mac no tiene tantos hilos para ese ritmo.")
+    return level
 
 
 def _load_config() -> dict:
     with _config_lock:
         if not CONFIG_PATH.is_file():
-            return {"btc_address": "", "threads": 4}
+            return {"btc_address": "", "level": "medio"}
         try:
             data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
-            return {"btc_address": "", "threads": 4}
+            return {"btc_address": "", "level": "medio"}
     address = data.get("btc_address") if isinstance(data, dict) else ""
-    threads = data.get("threads") if isinstance(data, dict) else 4
+    level = data.get("level") if isinstance(data, dict) else None
+    threads = data.get("threads") if isinstance(data, dict) else None
     if not isinstance(address, str):
         address = ""
+    if not isinstance(level, str):
+        level = None
     if not isinstance(threads, int):
-        threads = 4
-    return {"btc_address": address, "threads": threads}
+        threads = None
+    return {"btc_address": address, "level": normalize_level(level, threads)}
 
 
-def _write_config(address: str, threads: int) -> None:
-    payload = json.dumps({"btc_address": address, "threads": threads}, indent=2) + "\n"
+def _write_config(address: str, level: str) -> None:
+    spec = LEVELS[level]
+    payload = json.dumps(
+        {"btc_address": address, "level": level, "threads": spec["threads"]},
+        indent=2,
+    ) + "\n"
     tmp = CONFIG_PATH.with_suffix(".json.tmp")
     with _config_lock:
         tmp.write_text(payload, encoding="utf-8")

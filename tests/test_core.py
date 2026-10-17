@@ -6,9 +6,10 @@ import hashlib
 import unittest
 
 from app.btc_address import AddressError, validate_public_address
+from app.levels import normalize_level
 from app.odds import block_odds
 from app.parser import MinerLogParser
-from app.system_stats import parse_pmset_therm
+from app.system_stats import parse_cpu_temperature, parse_pmset_therm
 
 _B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 
@@ -121,6 +122,18 @@ class ThermalTests(unittest.TestCase):
     def test_throttled(self):
         parsed = parse_pmset_therm("CPU_Speed_Limit \t= 70")
         self.assertTrue(parsed["throttling"])
+
+    def test_die_temperature_line(self):
+        self.assertEqual(parse_cpu_temperature("CPU die temperature: 84.25 C\n"), 84.25)
+        self.assertIsNone(parse_cpu_temperature("no sensor"))
+
+
+class LevelTests(unittest.TestCase):
+    def test_known_levels(self):
+        self.assertEqual(normalize_level("alto"), "alto")
+        self.assertEqual(normalize_level(None, 2), "bajo")
+        self.assertEqual(normalize_level(None, 4), "medio")
+        self.assertEqual(normalize_level("nope", 12), "alto")
 
 
 if __name__ == "__main__":

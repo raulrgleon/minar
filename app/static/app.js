@@ -151,22 +151,23 @@ function render(data) {
   $("uptime").textContent = formatUptime(data.uptime_s);
   $("cpu").textContent = `${(data.cpu_percent || 0).toFixed(0)} %`;
   $("speed").textContent = data.speed_limit == null ? "sin dato" : `${data.speed_limit} de 100`;
-  $("temp").textContent = data.cpu_temp_c == null ? "sin lectura" : `${data.cpu_temp_c} °C`;
+  $("temp").textContent = data.cpu_temp_c == null ? "—" : `${Number(data.cpu_temp_c).toFixed(0)} °C`;
+  $("temp").className = data.cpu_temp_c != null && data.cpu_temp_c >= 90 ? "temp hot" : "temp";
   $("temp-note").textContent = data.temp_note || "";
   const logs = data.logs || [];
   $("logs").textContent = logs.length ? logs.join("\n") : "Cuando arranque, las líneas aparecen aquí.";
   $("logs").scrollTop = $("logs").scrollHeight;
   $("start").disabled = !!data.running;
   $("stop").disabled = !data.running;
-  $("threads").disabled = !!data.running;
   $("address").disabled = !!data.running;
+  if (data.level) selectLevel(data.level);
   if (data.running) shownStop = "";
   else if (data.pool === "exited" && shownStop !== "exited") {
     shownStop = "exited";
     showNotice("El minero se cerró solo. Las últimas líneas quedan abajo.");
   } else if (data.stop_reason && data.stop_reason !== shownStop) {
     shownStop = data.stop_reason;
-    const thermal = data.stop_reason.includes("velocidad") || data.stop_reason.includes("temperatura");
+    const thermal = /velocidad|temperatura|°C|núcleo/.test(data.stop_reason);
     showNotice(data.stop_reason, thermal ? "bad" : "ok");
   }
   renderOdds(data);
@@ -181,14 +182,27 @@ async function refresh() {
   }
 }
 
+let selectedLevel = "medio";
+
+function selectLevel(level) {
+  selectedLevel = level;
+  for (const name of ["bajo", "medio", "alto"]) {
+    const button = $(`level-${name}`);
+    if (button) button.setAttribute("aria-pressed", name === level ? "true" : "false");
+  }
+}
+
+function levelHelp(cfg) {
+  const cores = cfg.physical_cores || 8;
+  const logical = cfg.logical_cpus || 16;
+  return `Bajo usa 2 hilos, medio 4 y alto 8, uno por cada núcleo físico. Este iMac tiene ${cores} núcleos y ${logical} hilos. Alto calienta más; el panel para solo a 98 °C.`;
+}
+
 async function loadConfig() {
   const cfg = await api("/api/config");
   $("address").value = cfg.btc_address || "";
-  $("threads").max = String(cfg.max_threads || 16);
-  $("threads").value = String(cfg.threads || 4);
-  const cores = cfg.physical_cores || 8;
-  const logical = cfg.logical_cpus || cfg.max_threads;
-  $("thread-help").textContent = `Este iMac tiene ${cores} núcleos y ${logical} hilos lógicos. 4 hilos y prioridad baja (nice 15) dejan el resto usable. El pool y la contraseña están fijos.`;
+  selectLevel(cfg.level || "medio");
+  $("thread-help").textContent = levelHelp(cfg);
   if (!cfg.miner_present) {
     showNotice("Falta bin/minerd. En la carpeta del proyecto ejecuta scripts/build-minerd.sh.");
   }
@@ -201,13 +215,36 @@ $("setup").addEventListener("submit", async (event) => {
       method: "POST",
       body: JSON.stringify({
         btc_address: $("address").value,
-        threads: Number($("threads").value),
+        level: selectedLevel,
       }),
     });
     showNotice("Dirección guardada en este Mac. No se envía a ningún otro sitio.", "ok");
   } catch (err) {
     showNotice(err.message);
   }
+});
+
+document.querySelectorAll(".levels button").forEach((button) => {
+  button.addEventListener("click", async () => {
+    const level = button.dataset.level;
+    selectLevel(level);
+    try {
+      const saved = await api("/api/config", {
+        method: "POST",
+        body: JSON.stringify({
+          btc_address: $("address").value,
+          level,
+        }),
+      });
+      showNotice(
+        saved.restarted ? `Minando en ${level}.` : `Ritmo ${level} listo. Arranca cuando quieras.`,
+        "ok",
+      );
+      await refresh();
+    } catch (err) {
+      showNotice(err.message);
+    }
+  });
 });
 
 $("start").addEventListener("click", async () => {
@@ -217,12 +254,12 @@ $("start").addEventListener("click", async () => {
       method: "POST",
       body: JSON.stringify({
         btc_address: $("address").value,
-        threads: Number($("threads").value),
+        level: selectedLevel,
       }),
     });
     await api("/api/start", {
       method: "POST",
-      body: JSON.stringify({ threads: Number($("threads").value) }),
+      body: JSON.stringify({ level: selectedLevel }),
     });
     await refresh();
   } catch (err) {

@@ -83,7 +83,7 @@ python3 -m venv .venv
 cp config.example.json config.json
 ```
 
-Edit `config.json` and set `btc_address` to your public address. `threads` defaults to 4.
+Edit `config.json` and set `btc_address` to your public address. `level` is `bajo`, `medio`, or `alto` (default `medio`, 4 threads).
 
 ```bash
 ./start.command
@@ -111,8 +111,8 @@ caffeinate -ims nice -n 15 bin/minerd \
 ## What the panel does
 
 - Start and stop one `minerd` process.
-- Thread count from 1 to the number of logical CPUs. Default 4 of 16 on this iMac.
-- Priority `nice -n 15`.
+- Thread count is one of three levels: low is 2 threads at nice 15, medium is 4 at nice 10, high is 8 at nice 5.
+- CPU die temperature from `powermetrics`, allowed by a sudoers rule for that exact command. The panel stops the miner at 98 °C. The administrator password is not stored.
 - `caffeinate -ims` while the miner is running, so idle sleep stays off.
 - Live chart, current hashrate, and an average that ignores the first 8 seconds.
 - Accepted and rejected shares, uptime, pool status, and the latest log lines. Stats are parsed from `minerd` stderr. A line that cannot be parsed is kept in the log and does not stop the panel.
@@ -127,7 +127,7 @@ caffeinate -ims nice -n 15 bin/minerd \
 ```json
 {
   "btc_address": "bc1qyourpublicaddress",
-  "threads": 4
+  "level": "medio"
 }
 ```
 

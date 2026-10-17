@@ -21,6 +21,10 @@
         <p id="rate" class="rate">0 H/s</p>
         <p id="average" class="average">La media aparece cuando el ritmo se estabiliza.</p>
       </div>
+      <div>
+        <p id="temp" class="temp">—</p>
+        <p class="average">Temperatura del núcleo</p>
+      </div>
       <div class="actions">
         <button id="start" type="button">Arrancar</button>
         <button id="stop" type="button">Parar</button>
@@ -32,12 +36,13 @@
         Dirección pública
         <input id="address" name="address" autocomplete="off" spellcheck="false" inputmode="text">
       </label>
-      <label>
-        Hilos
-        <input id="threads" name="threads" type="number" min="1" max="16" value="4">
-      </label>
       <button id="save" type="submit">Guardar dirección</button>
     </form>
+    <div class="levels" role="group" aria-label="Ritmo">
+      <button id="level-bajo" type="button" data-level="bajo">Bajo</button>
+      <button id="level-medio" type="button" data-level="medio">Medio</button>
+      <button id="level-alto" type="button" data-level="alto">Alto</button>
+    </div>
     <p id="thread-help" class="help"></p>
 
     <canvas id="chart" width="1000" height="240" aria-label="Ritmo de hashes de los últimos minutos"></canvas>
@@ -53,7 +58,6 @@
       <div><dt>Tiempo</dt><dd id="uptime">0:00</dd></div>
       <div><dt>CPU</dt><dd id="cpu">—</dd></div>
       <div><dt>Límite de velocidad</dt><dd id="speed">—</dd></div>
-      <div><dt>Temperatura</dt><dd id="temp">sin lectura</dd></div>
     </dl>
     <p id="temp-note" class="help"></p>
 
